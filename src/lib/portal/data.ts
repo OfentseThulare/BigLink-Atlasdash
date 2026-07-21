@@ -1,9 +1,10 @@
 import { cents, type Cents } from "@/domain/money";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isSupabaseConfigured, shouldUseDemoData } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPortalUser } from "@/lib/portal/auth";
 import {
   demoAuditEvents,
+  cleanDashboard,
   demoDashboard,
   demoDeals,
   demoDisputes,
@@ -123,7 +124,7 @@ async function getLiveLedgerRows() {
 
 export async function getDashboardData(): Promise<PortalDashboard> {
   if (!isSupabaseConfigured()) {
-    return demoDashboard;
+    return shouldUseDemoData() ? demoDashboard : cleanDashboard;
   }
 
   const [user, rows, pendingCommission, openDisputes] = await Promise.all([
@@ -161,7 +162,7 @@ export async function getDashboardData(): Promise<PortalDashboard> {
 
 export async function getLedgerEntries(): Promise<LedgerEntryView[]> {
   if (!isSupabaseConfigured()) {
-    return demoLedgerEntries;
+    return shouldUseDemoData() ? demoLedgerEntries : [];
   }
 
   await getPortalUser();
@@ -170,7 +171,7 @@ export async function getLedgerEntries(): Promise<LedgerEntryView[]> {
 
 export async function getInvoices(): Promise<InvoiceView[]> {
   if (!isSupabaseConfigured()) {
-    return demoInvoices;
+    return shouldUseDemoData() ? demoInvoices : [];
   }
 
   await getPortalUser();
@@ -201,7 +202,7 @@ export async function getInvoices(): Promise<InvoiceView[]> {
 
 export async function getReferrals(): Promise<ReferralView[]> {
   if (!isSupabaseConfigured()) {
-    return demoReferrals;
+    return shouldUseDemoData() ? demoReferrals : [];
   }
 
   await getPortalUser();
@@ -227,7 +228,7 @@ export async function getReferrals(): Promise<ReferralView[]> {
 
 export async function getDeals(): Promise<DealView[]> {
   if (!isSupabaseConfigured()) {
-    return demoDeals;
+    return shouldUseDemoData() ? demoDeals : [];
   }
 
   await getPortalUser();
@@ -253,7 +254,7 @@ export async function getDeals(): Promise<DealView[]> {
 
 export async function getStatements(): Promise<StatementView[]> {
   if (!isSupabaseConfigured()) {
-    return demoStatements;
+    return shouldUseDemoData() ? demoStatements : [];
   }
 
   await getPortalUser();
@@ -283,7 +284,7 @@ export async function getStatements(): Promise<StatementView[]> {
 
 export async function getDisputes(): Promise<DisputeView[]> {
   if (!isSupabaseConfigured()) {
-    return demoDisputes;
+    return shouldUseDemoData() ? demoDisputes : [];
   }
 
   await getPortalUser();
@@ -315,7 +316,7 @@ export async function getDisputes(): Promise<DisputeView[]> {
 
 export async function getNotifications(): Promise<NotificationView[]> {
   if (!isSupabaseConfigured()) {
-    return demoNotifications;
+    return shouldUseDemoData() ? demoNotifications : [];
   }
 
   await getPortalUser();
@@ -341,7 +342,7 @@ export async function getNotifications(): Promise<NotificationView[]> {
 
 export async function getAuditEvents(): Promise<AuditEventView[]> {
   if (!isSupabaseConfigured()) {
-    return demoAuditEvents;
+    return shouldUseDemoData() ? demoAuditEvents : [];
   }
 
   await getPortalUser();

@@ -20,6 +20,34 @@ export const demoUser: PortalUser = {
   isDemo: true,
 };
 
+export const cleanSetupUser: PortalUser = {
+  initials: "BL",
+  name: "Partnership Portal",
+  role: "Supabase connection required",
+  company: "Atlas",
+  isDemo: false,
+};
+
+export const cleanDashboard: PortalDashboard = {
+  user: cleanSetupUser,
+  summary: {
+    period: "Current period",
+    netAtlasReceivable: cents(0),
+    bigLinkOwesAtlas: cents(0),
+    atlasOwesBigLink: cents(0),
+    pendingCommission: cents(0),
+    openDisputes: 0,
+    closeProgress: 0,
+  },
+  recentEntries: [],
+  closeChecklist: [
+    { label: "Supabase connected", value: "Required", done: false },
+    { label: "Opening balance loaded", value: "Pending", done: false },
+    { label: "Current unpaid items loaded", value: "Pending", done: false },
+    { label: "Statement approvals", value: "Not requested", done: false },
+  ],
+};
+
 export const demoLedgerEntries: LedgerEntryView[] = [
   {
     id: "1",

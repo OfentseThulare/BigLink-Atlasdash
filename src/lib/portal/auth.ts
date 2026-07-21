@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isSupabaseConfigured, shouldUseDemoData } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { demoUser } from "@/lib/portal/demo";
+import { cleanSetupUser, demoUser } from "@/lib/portal/demo";
 import type { PortalUser } from "@/lib/portal/types";
 
 type ProfileRow = {
@@ -22,7 +22,7 @@ function initialsFromName(name: string) {
 
 export async function getPortalUser(): Promise<PortalUser> {
   if (!isSupabaseConfigured()) {
-    return demoUser;
+    return shouldUseDemoData() ? demoUser : cleanSetupUser;
   }
 
   const supabase = await createSupabaseServerClient();
