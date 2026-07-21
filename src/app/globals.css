@@ -22,6 +22,9 @@
   --warning-soft: #fff4d9;
   --focus: #4277c6;
   --shadow: 0 1px 2px rgb(16 17 47 / 5%), 0 8px 28px rgb(16 17 47 / 5%);
+  --font-display: "Aptos Display", "Segoe UI", Arial, sans-serif;
+  --font-body: "Aptos", "Segoe UI", Arial, sans-serif;
+  --font-data: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
 }
 
 @theme inline {
