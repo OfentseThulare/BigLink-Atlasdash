@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Bell, ChevronDown, Menu } from "lucide-react";
+import type { PortalUser } from "@/lib/portal/types";
 
-export function Topbar() {
+export function Topbar({ user }: { user: PortalUser }) {
   return (
     <header className="topbar">
       <details className="mobile-menu">
@@ -21,7 +22,7 @@ export function Topbar() {
 
       <div className="topbar-title">
         <p>Shared financial position</p>
-        <span>Last reconciled 21/07/2026 at 08:42</span>
+        <span>{user.company} workspace, MFA protected</span>
       </div>
 
       <div className="topbar-actions">

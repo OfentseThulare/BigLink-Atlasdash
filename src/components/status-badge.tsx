@@ -7,12 +7,14 @@ const tones = {
   disputed: "border-ink/15 bg-neutral-100 text-neutral-700",
 };
 
+export type BadgeTone = keyof typeof tones;
+
 export function StatusBadge({
   children,
   tone,
 }: {
   children: React.ReactNode;
-  tone: keyof typeof tones;
+  tone: BadgeTone;
 }) {
   return (
     <span

@@ -14,9 +14,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { PortalUser } from "@/lib/portal/types";
 
 const navigation = [
-  { label: "Overview", href: "/", icon: Gauge, active: true },
+  { label: "Overview", href: "/", icon: Gauge },
   { label: "Ledger", href: "/ledger", icon: BookOpenCheck },
   { label: "Referrals", href: "/referrals", icon: Handshake },
   { label: "Deals", href: "/deals", icon: BriefcaseBusiness },
@@ -33,11 +34,13 @@ const secondaryNavigation = [
 
 function NavLink({
   item,
+  activeHref,
 }: {
   item: (typeof navigation)[number] | (typeof secondaryNavigation)[number];
+  activeHref: string;
 }) {
   const Icon = item.icon;
-  const active = "active" in item && item.active;
+  const active = activeHref === item.href;
   const count = "count" in item ? item.count : undefined;
 
   return (
@@ -61,7 +64,7 @@ function NavLink({
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ activeHref, user }: { activeHref: string; user: PortalUser }) {
   return (
     <aside className="sidebar" aria-label="Primary navigation">
       <div className="sidebar-logo">
@@ -86,21 +89,21 @@ export function Sidebar() {
 
       <nav className="sidebar-nav">
         {navigation.map((item) => (
-          <NavLink key={item.href} item={item} />
+          <NavLink key={item.href} item={item} activeHref={activeHref} />
         ))}
       </nav>
 
       <nav className="sidebar-nav sidebar-nav-secondary" aria-label="Account navigation">
         {secondaryNavigation.map((item) => (
-          <NavLink key={item.href} item={item} />
+          <NavLink key={item.href} item={item} activeHref={activeHref} />
         ))}
       </nav>
 
       <div className="sidebar-user">
-        <div className="avatar">OT</div>
+        <div className="avatar">{user.initials}</div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink">Ofentse Thulare</p>
-          <p className="truncate text-xs text-neutral-500">Atlas administrator</p>
+          <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
+          <p className="truncate text-xs text-neutral-500">{user.role}</p>
         </div>
       </div>
     </aside>

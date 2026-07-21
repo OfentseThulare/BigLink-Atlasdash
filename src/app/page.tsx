@@ -8,29 +8,26 @@ import {
   FileCheck2,
   WalletCards,
 } from "lucide-react";
-import { Sidebar } from "@/components/app-shell/sidebar";
-import { Topbar } from "@/components/app-shell/topbar";
+import { AppShell } from "@/components/app-shell/app-shell";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { StatusBadge } from "@/components/status-badge";
 import { formatZar } from "@/domain/money";
-import { closeChecklist, dashboardSummary, recentEntries } from "@/data/demo-dashboard";
+import { getDashboardData } from "@/lib/portal/data";
 
-export default function OverviewPage() {
-  const netDirection = dashboardSummary.netAtlasReceivable >= 0
+export default async function OverviewPage() {
+  const { summary, recentEntries, closeChecklist } = await getDashboardData();
+  const netDirection = summary.netAtlasReceivable >= 0
     ? "Big Link pays Atlas"
     : "Atlas pays Big Link";
 
   return (
-    <div className="app-frame">
-      <Sidebar />
-      <div className="app-main">
-        <Topbar />
+    <AppShell activeHref="/">
         <main className="page-shell">
           <section className="page-heading">
             <div>
               <p className="eyebrow">Partnership overview</p>
               <h1>Financial position</h1>
-              <p>All approved obligations, offsets, and exceptions for {dashboardSummary.period}.</p>
+              <p>All approved obligations, offsets, and exceptions for {summary.period}.</p>
             </div>
             <Link className="primary-button" href="/statements">
               Review monthly close
@@ -45,23 +42,23 @@ export default function OverviewPage() {
                 Live net position
               </div>
               <h2 id="balance-title">{netDirection}</h2>
-              <p className="balance-amount">{formatZar(dashboardSummary.netAtlasReceivable)}</p>
+              <p className="balance-amount">{formatZar(summary.netAtlasReceivable)}</p>
               <p className="balance-note">Undisputed payable items only. Pending amounts remain visible below.</p>
             </div>
             <div className="balance-breakdown">
               <div>
                 <span>Big Link owes Atlas</span>
-                <strong>{formatZar(dashboardSummary.bigLinkOwesAtlas)}</strong>
+                <strong>{formatZar(summary.bigLinkOwesAtlas)}</strong>
               </div>
               <div className="offset-symbol" aria-hidden="true">minus</div>
               <div>
                 <span>Atlas owes Big Link</span>
-                <strong>{formatZar(dashboardSummary.atlasOwesBigLink)}</strong>
+                <strong>{formatZar(summary.atlasOwesBigLink)}</strong>
               </div>
               <div className="offset-rule" />
               <div className="net-row">
                 <span>Net settlement</span>
-                <strong>{formatZar(dashboardSummary.netAtlasReceivable)}</strong>
+                <strong>{formatZar(summary.netAtlasReceivable)}</strong>
               </div>
             </div>
           </section>
@@ -69,29 +66,29 @@ export default function OverviewPage() {
           <section className="metric-grid" aria-label="Financial summary">
             <MetricCard
               label="Receivable by Atlas"
-              value={formatZar(dashboardSummary.bigLinkOwesAtlas)}
-              note="8 payable entries"
+              value={formatZar(summary.bigLinkOwesAtlas)}
+              note="Undisputed payable entries"
               icon={ArrowDownLeft}
               tone="positive"
             />
             <MetricCard
               label="Payable to Big Link"
-              value={formatZar(dashboardSummary.atlasOwesBigLink)}
-              note="4 commission entries"
+              value={formatZar(summary.atlasOwesBigLink)}
+              note="Released commission entries"
               icon={ArrowUpRight}
               tone="negative"
             />
             <MetricCard
               label="Pending commission"
-              value={formatZar(dashboardSummary.pendingCommission)}
+              value={formatZar(summary.pendingCommission)}
               note="Awaiting customer payment"
               icon={Clock3}
               tone="warning"
             />
             <MetricCard
               label="Open disputes"
-              value={String(dashboardSummary.openDisputes).padStart(2, "0")}
-              note="R95,000.00 excluded"
+              value={String(summary.openDisputes).padStart(2, "0")}
+              note="Excluded from payable balance"
               icon={CircleAlert}
             />
           </section>
@@ -164,18 +161,18 @@ export default function OverviewPage() {
                   <p className="eyebrow">July close</p>
                   <h2>Statement readiness</h2>
                 </div>
-                <span className="progress-value">{dashboardSummary.closeProgress}%</span>
+                <span className="progress-value">{summary.closeProgress}%</span>
               </div>
 
               <div
                 className="progress-track"
                 role="progressbar"
-                aria-valuenow={dashboardSummary.closeProgress}
+                aria-valuenow={summary.closeProgress}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-label="Monthly close readiness"
               >
-                <span style={{ width: `${dashboardSummary.closeProgress}%` }} />
+                <span style={{ width: `${summary.closeProgress}%` }} />
               </div>
 
               <div className="close-list">
@@ -199,7 +196,6 @@ export default function OverviewPage() {
             </aside>
           </div>
         </main>
-      </div>
-    </div>
+    </AppShell>
   );
 }
