@@ -20,6 +20,7 @@ const invoiceSchema = z.object({
   billToCompanyId: z.string().uuid().nullable().optional(),
   billToName: z.string().min(2).max(160),
   referralId: z.string().uuid().nullable().optional(),
+  atlasClientSourceId: z.string().min(1).max(160).nullable().optional(),
   dealId: z.string().uuid().nullable().optional(),
   issueDate: z.string().date(),
   dueDate: z.string().date().nullable().optional(),
@@ -54,11 +55,11 @@ export const atlasInvoiceWebhookSchema = z.object({
     });
   }
 
-  if (invoice.kind === "referral_commission_source" && !invoice.referralId) {
+  if (invoice.kind === "referral_commission_source" && !invoice.referralId && !invoice.atlasClientSourceId) {
     context.addIssue({
       code: "custom",
       path: ["invoice", "referralId"],
-      message: "Referral commission invoices require referralId.",
+      message: "Referral commission invoices require referralId or atlasClientSourceId.",
     });
   }
 

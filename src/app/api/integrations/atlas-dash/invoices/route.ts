@@ -61,6 +61,27 @@ export async function POST(request: Request) {
 
   try {
     const { invoice } = payload;
+    let referralId = invoice.referralId ?? null;
+
+    if (invoice.kind === "referral_commission_source" && !referralId && invoice.atlasClientSourceId) {
+      const { data: referral, error: referralError } = await supabase
+        .from("referrals")
+        .select("id")
+        .eq("atlas_client_source_id", invoice.atlasClientSourceId)
+        .in("status", ["approved", "termination_pending"])
+        .maybeSingle();
+
+      if (referralError) {
+        throw referralError;
+      }
+
+      if (!referral) {
+        throw new Error("No approved referral found for atlasClientSourceId.");
+      }
+
+      referralId = referral.id;
+    }
+
     const { data: invoiceRow, error: invoiceError } = await supabase
       .from("source_invoices")
       .upsert({
@@ -71,7 +92,7 @@ export async function POST(request: Request) {
         issuer_company_id: ATLAS_COMPANY_ID,
         bill_to_company_id: invoice.billToCompanyId ?? null,
         bill_to_name: invoice.billToName,
-        referral_id: invoice.referralId ?? null,
+        referral_id: referralId,
         deal_id: invoice.dealId ?? null,
         issue_date: invoice.issueDate,
         due_date: invoice.dueDate ?? null,

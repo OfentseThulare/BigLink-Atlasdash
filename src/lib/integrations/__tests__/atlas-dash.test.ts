@@ -49,6 +49,19 @@ describe("atlas dash invoice integration", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts Atlas contact attribution instead of a portal referral id", () => {
+    const parsed = atlasInvoiceWebhookSchema.safeParse({
+      ...basePayload,
+      invoice: {
+        ...basePayload.invoice,
+        referralId: null,
+        atlasClientSourceId: "atlas-contact-001",
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
   it("rejects invoice totals that do not match subtotal plus VAT", () => {
     const parsed = atlasInvoiceWebhookSchema.safeParse({
       ...basePayload,
