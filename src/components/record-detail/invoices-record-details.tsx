@@ -43,6 +43,7 @@ export function InvoicesRecordDetails({ invoices, userCompanyId, live, error }: 
             <p>
               {invoice.kind}, {invoice.sourceSystem}
             </p>
+            <p>{invoice.description}</p>
           </div>
           <div className="record-row-meta">
             <strong>{formatZar(invoice.total)}</strong>
@@ -65,12 +66,20 @@ export function InvoicesRecordDetails({ invoices, userCompanyId, live, error }: 
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
             <div className="detail-metadata">
               <p>
+                <span className="detail-label">Reference</span>
+                <strong>{invoice.number}</strong>
+              </p>
+              <p>
                 <span className="detail-label">Due on</span>
                 <strong>{invoice.dueDate}</strong>
               </p>
               <p>
                 <span className="detail-label">Amount</span>
                 <strong>{formatZar(invoice.total)}</strong>
+              </p>
+              <p>
+                <span className="detail-label">Description</span>
+                <strong>{invoice.description}</strong>
               </p>
               <p>
                 <span className="detail-label">Status</span>

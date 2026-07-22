@@ -166,6 +166,96 @@ export async function createDealAction(formData: FormData) {
   redirect("/deals");
 }
 
+const partnerInvoiceSchema = z.object({
+  invoiceNumber: z.string().trim().min(2).max(80),
+  issueDate: z.string().date(),
+  dueDate: z.string().date(),
+  lineDescription: z.string().trim().min(2).max(500),
+  subtotalAmount: z.string().trim().min(1),
+  vatAmount: z.preprocess(
+    (raw) => {
+      if (typeof raw !== "string") {
+        return null;
+      }
+
+      const trimmed = raw.trim();
+      return trimmed.length === 0 ? null : trimmed;
+    },
+    z.string().trim().min(1).optional(),
+  ),
+});
+
+function safeAmountFromForm(value: FormDataEntryValue | null, fieldName: string, allowZero = false) {
+  try {
+    if (allowZero && value !== null) {
+      const parsed = Number(String(value).replace(",", "."));
+
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        return Math.round(parsed * 100);
+      }
+
+      throw new Error();
+    }
+
+    return centsFromRand(value);
+  } catch {
+    throw new Error(`Enter a valid amount for ${fieldName}.`);
+  }
+}
+
+export async function recordPartnerInvoiceAction(formData: FormData) {
+  requireLivePortal();
+  const returnPath = parsePath(formData, "/invoices");
+  const values = partnerInvoiceSchema.safeParse({
+    invoiceNumber: formData.get("invoiceNumber"),
+    issueDate: formData.get("issueDate"),
+    dueDate: formData.get("dueDate"),
+    lineDescription: formData.get("lineDescription"),
+    subtotalAmount: formData.get("subtotalAmount"),
+    vatAmount: formData.get("vatAmount"),
+  });
+
+  if (!values.success) {
+    return redirectWithError(returnPath, values.error.issues[0]?.message ?? "Could not record the partner invoice.");
+  }
+
+  let subtotalCents: number;
+  let vatCents: number;
+
+  try {
+    subtotalCents = safeAmountFromForm(values.data.subtotalAmount, "subtotal");
+    vatCents = values.data.vatAmount ? safeAmountFromForm(values.data.vatAmount, "VAT", true) : 0;
+  } catch (error) {
+    if (error instanceof Error) {
+      return redirectWithError(returnPath, error.message);
+    }
+
+    return redirectWithError(returnPath, "Could not record the partner invoice.");
+  }
+
+  if (subtotalCents + vatCents <= 0) {
+    return redirectWithError(returnPath, "Invoice total must be greater than zero.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("record_partner_invoice", {
+    p_invoice_number: values.data.invoiceNumber,
+    p_issue_date: values.data.issueDate,
+    p_due_date: values.data.dueDate,
+    p_line_description: values.data.lineDescription,
+    p_subtotal_cents: subtotalCents,
+    p_vat_cents: vatCents,
+  });
+
+  if (error) {
+    return redirectWithError(returnPath, error.message);
+  }
+
+  revalidatePath("/invoices");
+  revalidatePath("/ledger");
+  redirect(returnPath);
+}
+
 export async function recordInvoicePaymentAction(formData: FormData) {
   requireLivePortal();
   const invoiceId = z.string().uuid().parse(formData.get("invoiceId"));

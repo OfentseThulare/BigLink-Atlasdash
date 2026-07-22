@@ -46,6 +46,7 @@ export type InvoiceView = {
   id: string;
   number: string;
   client: string;
+  description: string;
   kind: string;
   issueDate: string;
   dueDate: string;
