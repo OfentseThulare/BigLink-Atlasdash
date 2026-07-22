@@ -4,12 +4,22 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cleanSetupUser, demoUser } from "@/lib/portal/demo";
 import type { PortalUser } from "@/lib/portal/types";
 
+type CompanyRef = { slug: string | null; display_name: string | null };
+type MembershipRef = { companies: CompanyRef | CompanyRef[] | null };
+
 type ProfileRow = {
   full_name: string | null;
-  company_memberships: Array<{
-    companies: { slug: string | null; display_name: string | null } | null;
-  }> | null;
+  // One-to-one embeds come back as an object, one-to-many as an array.
+  company_memberships: MembershipRef | MembershipRef[] | null;
 };
+
+function unwrap<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value.at(0) ?? null;
+  }
+
+  return value ?? null;
+}
 
 function initialsFromName(name: string) {
   return name
@@ -40,14 +50,19 @@ export async function getPortalUser(): Promise<PortalUser> {
     redirect("/mfa");
   }
 
+  // company_memberships references profiles twice (profile_id and invited_by), so the
+  // embed must name the foreign key. Without it PostgREST errors and the company
+  // silently fell back to Atlas, mislabelling Big Link administrators.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, company_memberships(companies(slug, display_name))")
+    .select(
+      "full_name, company_memberships!company_memberships_profile_id_fkey(companies(slug, display_name))",
+    )
     .eq("auth_user_id", userResult.user.id)
     .single<ProfileRow>();
 
   const name = profile?.full_name || userResult.user.email || "Portal administrator";
-  const company = profile?.company_memberships?.at(0)?.companies;
+  const company = unwrap(unwrap(profile?.company_memberships)?.companies);
   const companyName = company?.slug === "big_link" ? "Big Link" : "Atlas";
 
   return {

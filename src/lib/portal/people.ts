@@ -19,10 +19,17 @@ export async function listPortalPeople(): Promise<{
 }> {
   const service = createSupabaseServiceClient();
 
-  const [{ data: memberships }, { data: invitations }] = await Promise.all([
+  // company_memberships has two foreign keys into profiles (profile_id and
+  // invited_by), so the embed has to name the one it means or PostgREST rejects it.
+  const [
+    { data: memberships, error: membershipError },
+    { data: invitations, error: invitationError },
+  ] = await Promise.all([
     service
       .from("company_memberships")
-      .select("status, profiles(full_name, email), companies(display_name)")
+      .select(
+        "status, profiles!company_memberships_profile_id_fkey(full_name, email), companies(display_name)",
+      )
       .eq("status", "active"),
     service
       .from("invitations")
@@ -30,6 +37,14 @@ export async function listPortalPeople(): Promise<{
       .is("accepted_at", null)
       .gt("expires_at", new Date().toISOString()),
   ]);
+
+  if (membershipError) {
+    throw new Error(membershipError.message);
+  }
+
+  if (invitationError) {
+    throw new Error(invitationError.message);
+  }
 
   // supabase-js types embedded relations as arrays, so unwrap the first row of each.
   type Embedded<T> = T | T[] | null;

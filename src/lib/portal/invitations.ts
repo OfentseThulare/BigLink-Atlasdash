@@ -38,25 +38,34 @@ async function requireVerifiedAdmin() {
   }
 
   const service = createSupabaseServiceClient();
-  const { data: membership } = await service
+  // Name the foreign key: company_memberships points at profiles twice.
+  const { data: membership, error } = await service
     .from("company_memberships")
-    .select("company_id, role, status, profiles(full_name)")
+    .select("company_id, role, status, profiles!company_memberships_profile_id_fkey(full_name)")
     .eq("profile_id", session.profileId)
     .maybeSingle<{
       company_id: string;
       role: string;
       status: string;
-      profiles: { full_name: string } | null;
+      profiles: { full_name: string } | { full_name: string }[] | null;
     }>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   if (!membership || membership.status !== "active" || membership.role !== "administrator") {
     throw new Error("Only an active administrator can send invitations.");
   }
 
+  const profile = Array.isArray(membership.profiles)
+    ? membership.profiles.at(0)
+    : membership.profiles;
+
   return {
     profileId: session.profileId,
     companyId: membership.company_id,
-    name: membership.profiles?.full_name ?? "An administrator",
+    name: profile?.full_name ?? "An administrator",
   };
 }
 
@@ -77,11 +86,20 @@ export async function sendInvitation(rawEmail: string, companySlug: CompanySlug)
 
   const { data: existingProfile } = await service
     .from("profiles")
-    .select("id, company_memberships(status)")
+    .select("id, company_memberships!company_memberships_profile_id_fkey(status)")
     .eq("email", email)
-    .maybeSingle<{ id: string; company_memberships: Array<{ status: string }> | null }>();
+    .maybeSingle<{
+      id: string;
+      company_memberships: { status: string } | { status: string }[] | null;
+    }>();
 
-  if (existingProfile?.company_memberships?.some((m) => m.status === "active")) {
+  const existingMemberships = Array.isArray(existingProfile?.company_memberships)
+    ? existingProfile.company_memberships
+    : existingProfile?.company_memberships
+      ? [existingProfile.company_memberships]
+      : [];
+
+  if (existingMemberships.some((m) => m.status === "active")) {
     throw new Error("That person already has an active portal account.");
   }
 
