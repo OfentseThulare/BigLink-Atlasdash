@@ -3,7 +3,12 @@ import { ShieldCheck } from "lucide-react";
 import { signInAction } from "@/lib/portal/actions";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const live = isSupabaseConfigured();
 
   return (
@@ -20,6 +25,11 @@ export default function LoginPage() {
           <p className="eyebrow">Partnership ledger</p>
           <h1>Administrator sign in</h1>
         </div>
+        {error ? (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        ) : null}
         <form action={signInAction} className="action-form">
           <label>
             <span>Email</span>
@@ -35,7 +45,7 @@ export default function LoginPage() {
         </form>
         <div className="auth-security">
           <ShieldCheck className="size-4" aria-hidden="true" />
-          <span>MFA is required before financial data loads.</span>
+          <span>A code is emailed to you before financial data loads.</span>
         </div>
       </section>
     </main>

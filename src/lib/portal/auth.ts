@@ -32,9 +32,11 @@ export async function getPortalUser(): Promise<PortalUser> {
     redirect("/login");
   }
 
-  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  // The second factor is an emailed numeric code, not a TOTP app, so this asks the
+  // database rather than reading the session assurance level.
+  const { data: verified } = await supabase.rpc("has_required_mfa");
 
-  if (assurance?.currentLevel !== "aal2") {
+  if (verified !== true) {
     redirect("/mfa");
   }
 
