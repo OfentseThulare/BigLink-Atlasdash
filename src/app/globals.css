@@ -796,6 +796,12 @@ tbody tr:last-child td {
 }
 
 .record-row {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  width: 100%;
+  background: transparent;
+  text-align: left;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -803,6 +809,11 @@ tbody tr:last-child td {
   gap: 18px;
   border-bottom: 1px solid var(--line);
   padding: 18px 22px;
+}
+
+.record-row-selected {
+  background: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 .record-row:last-child {
@@ -844,6 +855,87 @@ tbody tr:last-child td {
   font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
+}
+
+.record-detail-panel {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+}
+
+.record-detail-panel-content {
+  display: grid;
+  gap: 16px;
+  padding: 0 22px 22px;
+}
+
+.detail-metadata {
+  display: grid;
+  gap: 11px;
+  padding: 0 22px 16px;
+}
+
+.detail-metadata p {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.detail-metadata .detail-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.detail-metadata strong {
+  color: var(--ink-strong);
+  font-weight: 650;
+}
+
+.detail-actions {
+  display: grid;
+  justify-items: start;
+}
+
+.detail-success {
+  border: 1px solid color-mix(in srgb, var(--positive) 34%, transparent);
+  background: var(--positive-soft);
+  color: var(--positive-strong);
+  border-radius: 6px;
+  margin: 0;
+  padding: 11px 13px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.detail-form-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inline-note-field {
+  display: grid;
+  gap: 7px;
+}
+
+.inline-note-field label,
+.inline-note-field input,
+.inline-note-field textarea {
+  width: 100%;
+}
+
+.inline-note-field span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.subtle {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .action-form {

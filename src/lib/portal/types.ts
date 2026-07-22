@@ -5,6 +5,7 @@ export type PortalUser = {
   initials: string;
   name: string;
   role: string;
+  companyId: string | null;
   company: "Atlas" | "Big Link";
   isDemo: boolean;
 };
@@ -28,7 +29,17 @@ export type LedgerEntryView = {
   direction: string;
   amount: Cents;
   status: string;
+  statusCode: string;
   tone: BadgeTone;
+  debtorCompanyId: string;
+  creditorCompanyId: string;
+  disputeId: string | null;
+  disputeStatus: string | null;
+  settlementProposal: {
+    paidOn: string;
+    reference: string | null;
+    proposedByCompanyId: string;
+  } | null;
 };
 
 export type InvoiceView = {
@@ -41,7 +52,10 @@ export type InvoiceView = {
   total: Cents;
   paid: Cents;
   status: string;
+  paidState: "unpaid" | "partial" | "paid";
   sourceSystem: string;
+  issuerCompanyId: string;
+  billToCompanyId: string | null;
 };
 
 export type ReferralView = {
@@ -51,6 +65,9 @@ export type ReferralView = {
   submittedBy: string;
   startsOn: string;
   rate: string;
+  referredByCompanyId: string;
+  beneficiaryCompanyId: string;
+  submittedByCompanyId: string;
 };
 
 export type DealView = {
@@ -75,9 +92,17 @@ export type DisputeView = {
   id: string;
   reference: string;
   reason: string;
+  proposedResolution: string | null;
   status: string;
   openedBy: string;
+  openedByCompanyId: string;
   createdAt: string;
+  ledgerEntryId: string;
+  ledgerEntryDescription: string;
+  ledgerEntryStatus: string;
+  ledgerDebtorCompanyId: string;
+  ledgerCreditorCompanyId: string;
+  ledgerAmount: Cents;
 };
 
 export type NotificationView = {

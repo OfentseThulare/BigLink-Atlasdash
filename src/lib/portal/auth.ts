@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cleanSetupUser, demoUser } from "@/lib/portal/demo";
 import type { PortalUser } from "@/lib/portal/types";
 
-type CompanyRef = { slug: string | null; display_name: string | null };
+type CompanyRef = { id: string | null; slug: string | null; display_name: string | null };
 type MembershipRef = { companies: CompanyRef | CompanyRef[] | null };
 
 type ProfileRow = {
@@ -56,7 +56,7 @@ export async function getPortalUser(): Promise<PortalUser> {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "full_name, company_memberships!company_memberships_profile_id_fkey(companies(slug, display_name))",
+      "full_name, company_memberships!company_memberships_profile_id_fkey(companies(id, slug, display_name))",
     )
     .eq("auth_user_id", userResult.user.id)
     .single<ProfileRow>();
@@ -69,6 +69,7 @@ export async function getPortalUser(): Promise<PortalUser> {
     initials: initialsFromName(name) || "BL",
     name,
     role: `${companyName} administrator`,
+    companyId: company?.id ?? null,
     company: companyName,
     isDemo: false,
   };

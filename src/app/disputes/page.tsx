@@ -1,10 +1,18 @@
-import { Scale } from "lucide-react";
 import { AppShell } from "@/components/app-shell/app-shell";
-import { StatusBadge } from "@/components/status-badge";
+import { DisputesRecordDetails } from "@/components/record-detail/disputes-record-details";
+import { getPortalUser } from "@/lib/portal/auth";
 import { getDisputes } from "@/lib/portal/data";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
-export default async function DisputesPage() {
+export default async function DisputesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const user = await getPortalUser();
   const disputes = await getDisputes();
+  const live = isSupabaseConfigured();
 
   return (
     <AppShell activeHref="/disputes">
@@ -17,29 +25,7 @@ export default async function DisputesPage() {
           </div>
         </section>
 
-        <section className="content-section">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Review</p>
-              <h2>Dispute register</h2>
-            </div>
-            <Scale className="size-5 text-ink" aria-hidden="true" />
-          </div>
-          <div className="record-list">
-            {disputes.map((dispute) => (
-              <article className="record-row" key={dispute.id}>
-                <div>
-                  <span className="reference">{dispute.reference}</span>
-                  <h3>{dispute.reason}</h3>
-                  <p>Opened by {dispute.openedBy}, {dispute.createdAt}</p>
-                </div>
-                <div className="record-row-meta">
-                  <StatusBadge tone="disputed">{dispute.status}</StatusBadge>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+        <DisputesRecordDetails disputes={disputes} userCompanyId={user.companyId} live={live} error={error} />
       </main>
     </AppShell>
   );

@@ -24,6 +24,60 @@ function centsFromRand(value: FormDataEntryValue | null) {
   return Math.round(parsed * 100);
 }
 
+function optionalTrimmedField(value: FormDataEntryValue | null, max: number) {
+  const parsed = z
+    .preprocess(
+      (raw) => {
+        if (typeof raw !== "string") {
+          return undefined;
+        }
+
+        const trimmed = raw.trim();
+        return trimmed.length === 0 ? undefined : trimmed;
+      },
+      z.string().max(max).optional(),
+    )
+    .safeParse(value);
+
+  if (!parsed.success) {
+    return undefined;
+  }
+
+  return parsed.data;
+}
+
+function parsePath(formData: FormData, fallback: string) {
+  const parsed = z
+    .preprocess(
+      (raw) => {
+        if (typeof raw !== "string") {
+          return undefined;
+        }
+
+        const trimmed = raw.trim();
+        return trimmed.length === 0 ? undefined : trimmed;
+      },
+      z.string().max(140).optional(),
+    )
+    .safeParse(formData.get("returnPath"));
+
+  if (!parsed.success || !parsed.data?.startsWith("/")) {
+    return fallback;
+  }
+
+  return parsed.data;
+}
+
+function redirectWithError(path: string, message: string) {
+  const url = new URL(path, "http://localhost");
+  url.searchParams.set("error", message);
+  redirect(`${url.pathname}${url.search}`);
+}
+
+function hasText(value: string | undefined): value is string {
+  return value !== undefined && value.trim().length > 0;
+}
+
 const referralSchema = z.object({
   clientName: z.string().trim().min(2).max(160),
   clientEmail: z.string().trim().email().optional().or(z.literal("")),
@@ -152,6 +206,222 @@ export async function openDisputeAction(formData: FormData) {
   revalidatePath("/disputes");
   revalidatePath("/ledger");
   redirect("/disputes");
+}
+
+export async function proposeLedgerSettlementAction(formData: FormData) {
+  requireLivePortal();
+  const returnPath = parsePath(formData, "/ledger");
+
+  const ledgerEntryId = z.string().uuid().safeParse(formData.get("ledgerEntryId"));
+  const paidOn = z.string().trim().min(10).max(10).safeParse(formData.get("paidOn"));
+  const reference = optionalTrimmedField(formData.get("reference"), 120);
+
+  if (!ledgerEntryId.success) {
+    return redirectWithError(returnPath, "Select a valid ledger entry.");
+  }
+
+  if (!paidOn.success) {
+    return redirectWithError(returnPath, "Enter a valid settlement paid-on date.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("propose_ledger_settlement", {
+    p_entry_id: ledgerEntryId.data,
+    p_paid_on: paidOn.data,
+    p_reference: reference ?? null,
+  });
+
+  if (error) {
+    return redirectWithError(returnPath, error.message);
+  }
+
+  revalidatePath("/ledger");
+  revalidatePath("/disputes");
+  redirect(returnPath);
+}
+
+export async function decideLedgerSettlementAction(formData: FormData) {
+  requireLivePortal();
+  const returnPath = parsePath(formData, "/ledger");
+  const values = z
+    .object({
+      ledgerEntryId: z.string().uuid(),
+      approved: z.coerce.boolean(),
+      comment: z.preprocess(
+        (raw) => {
+          if (typeof raw !== "string") {
+            return undefined;
+          }
+
+          const trimmed = raw.trim();
+          return trimmed.length === 0 ? undefined : trimmed;
+        },
+        z.string().max(2000).optional(),
+      ),
+    })
+    .safeParse({
+      ledgerEntryId: formData.get("ledgerEntryId"),
+      approved: formData.get("approved"),
+      comment: formData.get("comment"),
+    });
+
+  if (!values.success) {
+    return redirectWithError(returnPath, values.error.issues[0]?.message ?? "Could not submit settlement decision.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("decide_ledger_settlement", {
+    p_entry_id: values.data.ledgerEntryId,
+    p_approved: values.data.approved,
+    p_comment: values.data.comment ?? null,
+  });
+
+  if (error) {
+    return redirectWithError(returnPath, error.message);
+  }
+
+  revalidatePath("/ledger");
+  revalidatePath("/disputes");
+  redirect(returnPath);
+}
+
+export async function resolveDisputeAction(formData: FormData) {
+  requireLivePortal();
+  const returnPath = parsePath(formData, "/disputes");
+  const values = z
+    .object({
+      disputeId: z.string().uuid(),
+      outcome: z.enum(["restore_payable", "close_with_adjustment"]),
+      comment: z.preprocess(
+        (raw) => {
+          if (typeof raw !== "string") {
+            return undefined;
+          }
+
+          const trimmed = raw.trim();
+          return trimmed.length === 0 ? undefined : trimmed;
+        },
+        z.string().max(2000).optional(),
+      ),
+    })
+    .safeParse({
+      disputeId: formData.get("disputeId"),
+      outcome: formData.get("outcome"),
+      comment: formData.get("comment"),
+    });
+
+  if (!values.success) {
+    return redirectWithError(returnPath, values.error.issues[0]?.message ?? "Could not resolve that dispute.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("resolve_dispute", {
+    p_dispute_id: values.data.disputeId,
+    p_outcome: values.data.outcome,
+    p_comment: values.data.comment ?? null,
+  });
+
+  if (error) {
+    return redirectWithError(returnPath, error.message);
+  }
+
+  revalidatePath("/disputes");
+  revalidatePath("/ledger");
+  revalidatePath("/invoices");
+  redirect(returnPath);
+}
+
+export async function updateRecordNotesAction(formData: FormData) {
+  requireLivePortal();
+  const returnPath = parsePath(formData, "/");
+  const values = z
+    .object({
+      recordType: z.enum(["ledger_entry", "dispute"]),
+      recordId: z.string().uuid(),
+      description: z.preprocess(
+        (raw) => {
+          if (typeof raw !== "string") {
+            return undefined;
+          }
+
+          const trimmed = raw.trim();
+          return trimmed.length === 0 ? undefined : trimmed;
+        },
+        z.string().min(2).max(500).optional(),
+      ),
+      reason: z.preprocess(
+        (raw) => {
+          if (typeof raw !== "string") {
+            return undefined;
+          }
+
+          const trimmed = raw.trim();
+          return trimmed.length === 0 ? undefined : trimmed;
+        },
+        z.string().min(10).max(2000).optional(),
+      ),
+      reference: z.preprocess(
+        (raw) => {
+          if (typeof raw !== "string") {
+            return undefined;
+          }
+
+          const trimmed = raw.trim();
+          return trimmed.length === 0 ? undefined : trimmed;
+        },
+        z.string().max(120).optional(),
+      ),
+      proposedResolution: z.preprocess(
+        (raw) => {
+          if (typeof raw !== "string") {
+            return undefined;
+          }
+
+          const trimmed = raw.trim();
+          return trimmed.length === 0 ? undefined : trimmed;
+        },
+        z.string().max(2000).optional(),
+      ),
+    })
+    .safeParse({
+      recordType: formData.get("recordType"),
+      recordId: formData.get("recordId"),
+      description: formData.get("description"),
+      reason: formData.get("reason"),
+      reference: formData.get("reference"),
+      proposedResolution: formData.get("proposedResolution"),
+    });
+
+  if (!values.success) {
+    return redirectWithError(returnPath, values.error.issues[0]?.message ?? "Could not update record notes.");
+  }
+
+  if (
+    !hasText(values.data.description) &&
+    !hasText(values.data.reason) &&
+    !hasText(values.data.reference) &&
+    !hasText(values.data.proposedResolution)
+  ) {
+    return redirectWithError(returnPath, "No note fields changed.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("update_record_notes", {
+    p_record_type: values.data.recordType,
+    p_record_id: values.data.recordId,
+    p_description: values.data.description ?? null,
+    p_reason: values.data.reason ?? null,
+    p_reference: values.data.reference ?? null,
+    p_proposed_resolution: values.data.proposedResolution ?? null,
+  });
+
+  if (error) {
+    return redirectWithError(returnPath, error.message);
+  }
+
+  revalidatePath("/ledger");
+  revalidatePath("/disputes");
+  redirect(returnPath);
 }
 
 export async function proposeMonthlyStatementAction(formData: FormData) {

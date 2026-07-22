@@ -39,6 +39,55 @@ type LedgerRow = {
   status: string;
   occurred_on: string;
   description: string;
+  metadata: Record<string, unknown>;
+};
+
+type InvoiceRow = {
+  id: string;
+  issuer_company_id: string;
+  bill_to_company_id: string | null;
+  invoice_number: string;
+  bill_to_name: string;
+  kind: string;
+  issue_date: string;
+  due_date: string | null;
+  total_including_vat_cents: number;
+  status: string;
+  source_system: string;
+  invoice_payments: { amount_cents: number }[] | null;
+};
+
+type DisputeLedgerEntry = {
+  id: string;
+  reference: string;
+  description: string;
+  status: string;
+  debtor_company_id: string;
+  creditor_company_id: string;
+  amount_cents: number;
+};
+
+type DisputeRow = {
+  id: string;
+  reason: string;
+  proposed_resolution: string | null;
+  status: string;
+  created_at: string;
+  opened_by_company_id: string;
+  opened_by: string;
+  ledger_entry_id: string;
+  ledger_entries: DisputeLedgerEntry | DisputeLedgerEntry[] | null;
+};
+
+type ReferralRow = {
+  id: string;
+  client_name: string;
+  status: string;
+  starts_on: string | null;
+  commission_rate_basis_points: number;
+  referred_by_company_id: string;
+  beneficiary_company_id: string;
+  submitted_by: string;
 };
 
 function formatDate(value: string | null | undefined) {
@@ -84,7 +133,35 @@ function ledgerDirection(row: LedgerRow) {
   return "Partnership obligation";
 }
 
-function mapLedgerEntry(row: LedgerRow): LedgerEntryView {
+function getString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getSettlementProposal(metadata: Record<string, unknown>) {
+  const proposal = metadata.settlement_proposal;
+  if (typeof proposal !== "object" || proposal === null) {
+    return null;
+  }
+
+  const paidOn = getString((proposal as Record<string, unknown>).paid_on);
+  const proposedByCompanyId = getString((proposal as Record<string, unknown>).proposed_by_company_id);
+  const reference = getString((proposal as Record<string, unknown>).reference);
+
+  if (!paidOn || !proposedByCompanyId) {
+    return null;
+  }
+
+  return {
+    paidOn,
+    proposedByCompanyId,
+    reference: reference || null,
+  };
+}
+
+function mapLedgerEntry(
+  row: LedgerRow,
+  dispute: { id: string; status: string } | null,
+): LedgerEntryView {
   return {
     id: row.id,
     reference: row.reference,
@@ -94,7 +171,13 @@ function mapLedgerEntry(row: LedgerRow): LedgerEntryView {
     direction: ledgerDirection(row),
     amount: cents(row.amount_cents),
     status: humanStatus(row.status),
+    statusCode: row.status,
     tone: ledgerTone(row),
+    debtorCompanyId: row.debtor_company_id,
+    creditorCompanyId: row.creditor_company_id,
+    disputeId: dispute?.id ?? null,
+    disputeStatus: dispute?.status ?? null,
+    settlementProposal: getSettlementProposal(row.metadata),
   };
 }
 
@@ -111,7 +194,9 @@ async function getLiveLedgerRows() {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("ledger_entries")
-    .select("id, reference, entry_type, debtor_company_id, creditor_company_id, amount_cents, status, occurred_on, description")
+    .select(
+      "id, reference, entry_type, debtor_company_id, creditor_company_id, amount_cents, status, occurred_on, description, metadata",
+    )
     .order("occurred_on", { ascending: false })
     .limit(100);
 
@@ -120,6 +205,25 @@ async function getLiveLedgerRows() {
   }
 
   return (data ?? []) as LedgerRow[];
+}
+
+async function getDisputesForEntries(entries: LedgerRow[]) {
+  if (entries.length === 0) {
+    return new Map<string, { id: string; status: string }>();
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("disputes")
+    .select("id, ledger_entry_id, status")
+    .in("ledger_entry_id", entries.map((row) => row.id))
+    .in("status", ["open", "under_review", "resolution_pending"]);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return new Map((data ?? []).map((row) => [row.ledger_entry_id, { id: row.id, status: row.status }]));
 }
 
 export async function getDashboardData(): Promise<PortalDashboard> {
@@ -150,7 +254,7 @@ export async function getDashboardData(): Promise<PortalDashboard> {
       openDisputes,
       closeProgress: proposedStatement ? 88 : Math.min(80, Math.round((payableCount / 12) * 100)),
     },
-    recentEntries: rows.slice(0, 8).map(mapLedgerEntry),
+    recentEntries: rows.slice(0, 8).map((row) => mapLedgerEntry(row, null)),
     closeChecklist: [
       { label: "Payable items reconciled", value: `${payableCount} open`, done: payableCount > 0 },
       { label: "Pending commissions reviewed", value: pendingCommission > 0 ? "Items pending" : "Clear", done: true },
@@ -166,7 +270,10 @@ export async function getLedgerEntries(): Promise<LedgerEntryView[]> {
   }
 
   await getPortalUser();
-  return (await getLiveLedgerRows()).map(mapLedgerEntry);
+  const rows = await getLiveLedgerRows();
+  const disputeRows = await getDisputesForEntries(rows);
+
+  return rows.map((row) => mapLedgerEntry(row, disputeRows.get(row.id) ?? null));
 }
 
 export async function getInvoices(): Promise<InvoiceView[]> {
@@ -178,7 +285,13 @@ export async function getInvoices(): Promise<InvoiceView[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("source_invoices")
-    .select("id, invoice_number, bill_to_name, kind, issue_date, due_date, total_including_vat_cents, status, source_system, invoice_payments(amount_cents)")
+    .select(
+      `
+        id, invoice_number, bill_to_name, issuer_company_id, bill_to_company_id, kind,
+        issue_date, due_date, total_including_vat_cents, status, source_system,
+        invoice_payments(amount_cents)
+      `,
+    )
     .order("issue_date", { ascending: false })
     .limit(100);
 
@@ -196,7 +309,19 @@ export async function getInvoices(): Promise<InvoiceView[]> {
     total: cents(row.total_including_vat_cents),
     paid: cents((row.invoice_payments ?? []).reduce((total, payment) => total + payment.amount_cents, 0)),
     status: humanStatus(row.status),
+    paidState: (() => {
+      const paidAmount = (row.invoice_payments ?? []).reduce((total, payment) => total + payment.amount_cents, 0);
+      if (paidAmount <= 0) {
+        return "unpaid";
+      }
+      if (paidAmount < row.total_including_vat_cents) {
+        return "partial";
+      }
+      return "paid";
+    })(),
     sourceSystem: row.source_system === "atlas_dash" ? "Atlas Dash" : "Portal",
+    issuerCompanyId: row.issuer_company_id,
+    billToCompanyId: row.bill_to_company_id,
   }));
 }
 
@@ -209,7 +334,9 @@ export async function getReferrals(): Promise<ReferralView[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("referrals")
-    .select("id, client_name, status, starts_on, commission_rate_basis_points")
+    .select(
+      "id, client_name, referred_by_company_id, beneficiary_company_id, submitted_by, status, starts_on, commission_rate_basis_points",
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -221,6 +348,9 @@ export async function getReferrals(): Promise<ReferralView[]> {
     client: row.client_name,
     status: humanStatus(row.status),
     submittedBy: "Big Link",
+    referredByCompanyId: row.referred_by_company_id,
+    beneficiaryCompanyId: row.beneficiary_company_id,
+    submittedByCompanyId: row.submitted_by,
     startsOn: formatDate(row.starts_on),
     rate: `${row.commission_rate_basis_points / 100}% of invoice value inc VAT`,
   }));
@@ -291,7 +421,10 @@ export async function getDisputes(): Promise<DisputeView[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("disputes")
-    .select("id, reason, status, created_at, opened_by_company_id, ledger_entries!disputes_ledger_entry_id_fkey(reference)")
+    .select(`
+      id, reason, proposed_resolution, status, created_at, opened_by_company_id, opened_by, ledger_entry_id,
+      ledger_entries!disputes_ledger_entry_id_fkey(id, reference, description, status, debtor_company_id, creditor_company_id, amount_cents)
+    `)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -299,13 +432,25 @@ export async function getDisputes(): Promise<DisputeView[]> {
   }
 
   return (data ?? []).map((row) => {
+    const linkedRaw = (row.ledger_entries as DisputeRow["ledger_entries"] | null | undefined) ?? null;
+    const linkedLedger = Array.isArray(linkedRaw) ? linkedRaw[0] ?? null : linkedRaw;
+    const mappedAmount = linkedLedger?.amount_cents ? linkedLedger.amount_cents : 0;
+
     return {
       id: row.id,
-      reference: (row.ledger_entries as unknown as { reference: string } | null | undefined)?.reference ?? "Ledger item",
+      reference: linkedLedger?.reference ?? "Ledger item",
       reason: row.reason,
+      proposedResolution: row.proposed_resolution,
       status: humanStatus(row.status),
       openedBy: row.opened_by_company_id === ATLAS_ID ? "Atlas" : "Big Link",
+      openedByCompanyId: row.opened_by_company_id,
       createdAt: formatDate(row.created_at),
+      ledgerEntryId: row.ledger_entry_id,
+      ledgerEntryDescription: linkedLedger?.description ?? "Ledger item",
+      ledgerEntryStatus: linkedLedger?.status ? humanStatus(linkedLedger.status) : "Unknown",
+      ledgerDebtorCompanyId: linkedLedger?.debtor_company_id ?? "",
+      ledgerCreditorCompanyId: linkedLedger?.creditor_company_id ?? "",
+      ledgerAmount: cents(mappedAmount),
     };
   });
 }
