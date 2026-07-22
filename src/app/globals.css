@@ -1297,3 +1297,65 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+.primary-button,
+.secondary-button,
+.link-button {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 110ms ease-out,
+    box-shadow 110ms ease-out;
+}
+
+.primary-button:active,
+.secondary-button:active,
+.link-button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+.text-field:focus-visible,
+.record-row:focus-visible,
+.table-scroll tbody tr:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--focus) 36%, transparent);
+  outline-offset: 2px;
+}
+
+.record-row,
+.table-scroll tbody tr {
+  cursor: pointer;
+  transition:
+    background-color 110ms ease-out,
+    transform 110ms ease-out,
+    box-shadow 110ms ease-out;
+}
+
+.record-row:hover,
+.table-scroll tbody tr:hover {
+  background: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.record-row:active,
+.table-scroll tbody tr:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-button:active,
+  .secondary-button:active,
+  .link-button:active,
+  .record-row:active,
+  .table-scroll tbody tr:active {
+    transform: none;
+  }
+}
