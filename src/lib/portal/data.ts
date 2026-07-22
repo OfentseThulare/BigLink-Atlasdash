@@ -291,7 +291,7 @@ export async function getDisputes(): Promise<DisputeView[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("disputes")
-    .select("id, reason, status, created_at, opened_by_company_id, ledger_entries(reference)")
+    .select("id, reason, status, created_at, opened_by_company_id, ledger_entries!disputes_ledger_entry_id_fkey(reference)")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -299,13 +299,9 @@ export async function getDisputes(): Promise<DisputeView[]> {
   }
 
   return (data ?? []).map((row) => {
-    const ledgerEntry = Array.isArray(row.ledger_entries)
-      ? row.ledger_entries.at(0)
-      : row.ledger_entries;
-
     return {
       id: row.id,
-      reference: ledgerEntry?.reference ?? "Ledger item",
+      reference: (row.ledger_entries as unknown as { reference: string } | null | undefined)?.reference ?? "Ledger item",
       reason: row.reason,
       status: humanStatus(row.status),
       openedBy: row.opened_by_company_id === ATLAS_ID ? "Atlas" : "Big Link",

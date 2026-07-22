@@ -80,7 +80,7 @@ export async function createDealAction(formData: FormData) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, company_memberships(company_id)")
+    .select("id, company_memberships!company_memberships_profile_id_fkey(company_id)")
     .eq("auth_user_id", user.id)
     .single();
 
@@ -88,7 +88,7 @@ export async function createDealAction(formData: FormData) {
     throw new Error(profileError.message);
   }
 
-  const companyId = profile.company_memberships?.at(0)?.company_id;
+  const companyId = (profile.company_memberships as unknown as { company_id: string } | null | undefined)?.company_id;
 
   if (!companyId) {
     throw new Error("No active company membership found.");
