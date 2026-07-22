@@ -41,12 +41,16 @@ export async function POST(request: Request) {
   const payload = parsed.data;
   const supabase = createSupabaseServiceClient();
   const payloadSha = sha256Hex(rawBody);
+  const sourceRecordId =
+    payload.eventType === "invoice.upsert"
+      ? payload.invoice.sourceId
+      : (payload.payment.sourceId ?? payload.payment.invoiceSourceId);
 
   const { error: eventError } = await supabase.from("integration_events").insert({
     integration: "atlas_dash",
     event_id: payload.eventId,
     event_type: payload.eventType,
-    source_record_id: payload.invoice.sourceId,
+    source_record_id: sourceRecordId,
     payload_sha256: payloadSha,
     status: "processing",
   });
@@ -60,83 +64,115 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { invoice } = payload;
-    let referralId = invoice.referralId ?? null;
+    if (payload.eventType === "invoice.upsert") {
+      const { invoice } = payload;
+      let referralId = invoice.referralId ?? null;
 
-    if (invoice.kind === "referral_commission_source" && !referralId && invoice.atlasClientSourceId) {
-      const { data: referral, error: referralError } = await supabase
-        .from("referrals")
+      if (invoice.kind === "referral_commission_source" && !referralId && invoice.atlasClientSourceId) {
+        const { data: referral, error: referralError } = await supabase
+          .from("referrals")
+          .select("id")
+          .eq("atlas_client_source_id", invoice.atlasClientSourceId)
+          .in("status", ["approved", "termination_pending"])
+          .maybeSingle();
+
+        if (referralError) {
+          throw referralError;
+        }
+
+        if (!referral) {
+          throw new Error("No approved referral found for atlasClientSourceId.");
+        }
+
+        referralId = referral.id;
+      }
+
+      const { data: invoiceRow, error: invoiceError } = await supabase
+        .from("source_invoices")
+        .upsert({
+          source_system: "atlas_dash",
+          source_id: invoice.sourceId,
+          invoice_number: invoice.invoiceNumber,
+          kind: invoice.kind,
+          issuer_company_id: ATLAS_COMPANY_ID,
+          bill_to_company_id: invoice.billToCompanyId ?? null,
+          bill_to_name: invoice.billToName,
+          referral_id: referralId,
+          deal_id: invoice.dealId ?? null,
+          issue_date: invoice.issueDate,
+          due_date: invoice.dueDate ?? null,
+          subtotal_cents: invoice.subtotalCents,
+          vat_cents: invoice.vatCents,
+          total_including_vat_cents: invoice.totalIncludingVatCents,
+          status: invoice.status,
+          source_updated_at: invoice.sourceUpdatedAt ?? null,
+          synced_at: new Date().toISOString(),
+          raw_source: payload,
+        }, {
+          onConflict: "source_system,source_id",
+        })
         .select("id")
-        .eq("atlas_client_source_id", invoice.atlasClientSourceId)
-        .in("status", ["approved", "termination_pending"])
-        .maybeSingle();
+        .single();
 
-      if (referralError) {
-        throw referralError;
+      if (invoiceError) {
+        throw invoiceError;
       }
 
-      if (!referral) {
-        throw new Error("No approved referral found for atlasClientSourceId.");
+      const { error: deleteError } = await supabase
+        .from("source_invoice_items")
+        .delete()
+        .eq("invoice_id", invoiceRow.id);
+
+      if (deleteError) {
+        throw deleteError;
       }
 
-      referralId = referral.id;
-    }
+      if (invoice.items.length > 0) {
+        const { error: itemsError } = await supabase.from("source_invoice_items").insert(
+          invoice.items.map((item) => ({
+            invoice_id: invoiceRow.id,
+            position: item.position,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price_cents: item.unitPriceCents,
+            line_total_cents: item.lineTotalCents,
+          })),
+        );
 
-    const { data: invoiceRow, error: invoiceError } = await supabase
-      .from("source_invoices")
-      .upsert({
-        source_system: "atlas_dash",
-        source_id: invoice.sourceId,
-        invoice_number: invoice.invoiceNumber,
-        kind: invoice.kind,
-        issuer_company_id: ATLAS_COMPANY_ID,
-        bill_to_company_id: invoice.billToCompanyId ?? null,
-        bill_to_name: invoice.billToName,
-        referral_id: referralId,
-        deal_id: invoice.dealId ?? null,
-        issue_date: invoice.issueDate,
-        due_date: invoice.dueDate ?? null,
-        subtotal_cents: invoice.subtotalCents,
-        vat_cents: invoice.vatCents,
-        total_including_vat_cents: invoice.totalIncludingVatCents,
-        status: invoice.status,
-        source_updated_at: invoice.sourceUpdatedAt ?? null,
-        synced_at: new Date().toISOString(),
-        raw_source: payload,
-      }, {
-        onConflict: "source_system,source_id",
-      })
-      .select("id")
-      .single();
-
-    if (invoiceError) {
-      throw invoiceError;
-    }
-
-    const { error: deleteError } = await supabase
-      .from("source_invoice_items")
-      .delete()
-      .eq("invoice_id", invoiceRow.id);
-
-    if (deleteError) {
-      throw deleteError;
-    }
-
-    if (invoice.items.length > 0) {
-      const { error: itemsError } = await supabase.from("source_invoice_items").insert(
-        invoice.items.map((item) => ({
-          invoice_id: invoiceRow.id,
-          position: item.position,
-          description: item.description,
-          quantity: item.quantity,
-          unit_price_cents: item.unitPriceCents,
-          line_total_cents: item.lineTotalCents,
-        })),
-      );
-
-      if (itemsError) {
-        throw itemsError;
+        if (itemsError) {
+          throw itemsError;
+        }
       }
+
+      await supabase
+        .from("integration_events")
+        .update({
+          status: "processed",
+          processed_at: new Date().toISOString(),
+        })
+        .eq("integration", "atlas_dash")
+        .eq("event_id", payload.eventId);
+
+      return NextResponse.json({ ok: true, invoiceId: invoiceRow.id });
+    }
+
+    const { data: paymentRows, error: paymentError } = await supabase.rpc("record_atlas_dash_payment", {
+      p_invoice_source_id: payload.eventType === "payment.recorded"
+        ? (payload.payment.sourceId ?? payload.payment.invoiceSourceId)
+        : null,
+      p_amount_cents: payload.payment.amountCents,
+      p_paid_on: payload.payment.paidOn,
+      p_reference: payload.payment.reference ?? null,
+    });
+
+    if (paymentError) {
+      throw paymentError;
+    }
+
+    const paymentResult = Array.isArray(paymentRows) ? paymentRows[0] : null;
+
+    if (!paymentResult) {
+      throw new Error("Payment processing returned no result.");
     }
 
     await supabase
@@ -148,7 +184,11 @@ export async function POST(request: Request) {
       .eq("integration", "atlas_dash")
       .eq("event_id", payload.eventId);
 
-    return NextResponse.json({ ok: true, invoiceId: invoiceRow.id });
+    return NextResponse.json({
+      ok: true,
+      paymentId: paymentResult.payment_id,
+      releasedLedgerEntryId: paymentResult.released_ledger_entry_id ?? null,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown integration error.";
 

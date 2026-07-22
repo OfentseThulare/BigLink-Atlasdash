@@ -32,6 +32,17 @@ const basePayload = {
   },
 };
 
+const paymentPayload = {
+  eventId: "payment-event-001",
+  eventType: "payment.recorded",
+  payment: {
+    sourceId: "atlas-invoice-001",
+    amountCents: 57500,
+    paidOn: "2026-07-15",
+    reference: "PAY-1",
+  },
+};
+
 describe("atlas dash invoice integration", () => {
   it("verifies HMAC signatures with raw or prefixed headers", () => {
     const rawBody = JSON.stringify(basePayload);
@@ -81,6 +92,37 @@ describe("atlas dash invoice integration", () => {
         ...basePayload.invoice,
         kind: "variable_commission_source",
         referralId: null,
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it("accepts a valid Atlas payment record event", () => {
+    const parsed = atlasInvoiceWebhookSchema.safeParse(paymentPayload);
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("accepts payment records that use invoiceSourceId", () => {
+    const parsed = atlasInvoiceWebhookSchema.safeParse({
+      ...paymentPayload,
+      payment: {
+        ...paymentPayload.payment,
+        sourceId: undefined,
+        invoiceSourceId: "atlas-invoice-001",
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("requires a valid paid payment amount", () => {
+    const parsed = atlasInvoiceWebhookSchema.safeParse({
+      ...paymentPayload,
+      payment: {
+        ...paymentPayload.payment,
+        amountCents: 0,
       },
     });
 
