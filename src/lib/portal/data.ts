@@ -48,7 +48,7 @@ type InvoiceRow = {
   issuer_company_id: string;
   bill_to_company_id: string | null;
   invoice_number: string;
-  invoice_items?: {
+  source_invoice_items?: {
     description: string;
     position: number;
   }[];
@@ -292,7 +292,7 @@ export async function getInvoices(): Promise<InvoiceView[]> {
     .from("source_invoices")
     .select(
       `
-        id, invoice_number, bill_to_name, issuer_company_id, bill_to_company_id, kind, invoice_items(description, position),
+        id, invoice_number, bill_to_name, issuer_company_id, bill_to_company_id, kind, source_invoice_items(description, position),
         issue_date, due_date, total_including_vat_cents, status, source_system,
         invoice_payments(amount_cents)
       `,
@@ -305,7 +305,7 @@ export async function getInvoices(): Promise<InvoiceView[]> {
   }
 
   return (data ?? []).map((row) => ({
-    description: (row.invoice_items ?? [])
+    description: (row.source_invoice_items ?? [])
       .slice()
       .sort((a, b) => a.position - b.position)[0]?.description?.trim() || "No line description",
     id: row.id,
