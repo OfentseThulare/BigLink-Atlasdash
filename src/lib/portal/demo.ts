@@ -14,6 +14,11 @@ import type {
 
 const ATLAS_ID = "00000000-0000-4000-8000-000000000001";
 const BIG_LINK_ID = "00000000-0000-4000-8000-000000000002";
+const UNRESOLVED_DISPUTE_STATUSES = ["open", "under_review", "resolution_pending"] as const;
+
+function isUnresolvedDisputeStatus(status: string) {
+  return UNRESOLVED_DISPUTE_STATUSES.includes(status.toLowerCase() as (typeof UNRESOLVED_DISPUTE_STATUSES)[number]);
+}
 
 export const demoUser: PortalUser = {
   initials: "OT",
@@ -127,26 +132,6 @@ export const demoLedgerEntries: LedgerEntryView[] = [
     settlementProposal: null,
   },
 ];
-
-export const demoDashboard: PortalDashboard = {
-  user: demoUser,
-  summary: {
-    period: "July 2026",
-    netAtlasReceivable: cents(1_248_500),
-    bigLinkOwesAtlas: cents(2_018_500),
-    atlasOwesBigLink: cents(770_000),
-    pendingCommission: cents(635_000),
-    openDisputes: 2,
-    closeProgress: 72,
-  },
-  recentEntries: demoLedgerEntries,
-  closeChecklist: [
-    { label: "Payable items reconciled", value: "12 of 12", done: true },
-    { label: "Pending commissions reviewed", value: "4 items", done: true },
-    { label: "Open disputes resolved", value: "2 remaining", done: false },
-    { label: "Statement approvals", value: "Not requested", done: false },
-  ],
-};
 
 export const demoInvoices: InvoiceView[] = [
   {
@@ -288,6 +273,28 @@ export const demoDisputes: DisputeView[] = [
     ledgerAmount: cents(575_000),
   },
 ];
+
+const demoOpenDisputeCount = demoDisputes.filter((dispute) => isUnresolvedDisputeStatus(dispute.status)).length;
+
+export const demoDashboard: PortalDashboard = {
+  user: demoUser,
+  summary: {
+    period: "July 2026",
+    netAtlasReceivable: cents(1_248_500),
+    bigLinkOwesAtlas: cents(2_018_500),
+    atlasOwesBigLink: cents(770_000),
+    pendingCommission: cents(635_000),
+    openDisputes: demoOpenDisputeCount,
+    closeProgress: 72,
+  },
+  recentEntries: demoLedgerEntries,
+  closeChecklist: [
+    { label: "Payable items reconciled", value: "12 of 12", done: true },
+    { label: "Pending commissions reviewed", value: "4 items", done: true },
+    { label: "Open disputes resolved", value: `${demoOpenDisputeCount} remaining`, done: false },
+    { label: "Statement approvals", value: "Not requested", done: false },
+  ],
+};
 
 export const demoNotifications: NotificationView[] = [
   {

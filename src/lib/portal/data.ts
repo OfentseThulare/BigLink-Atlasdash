@@ -28,6 +28,7 @@ import type {
 
 const ATLAS_ID = "00000000-0000-4000-8000-000000000001";
 const BIG_LINK_ID = "00000000-0000-4000-8000-000000000002";
+const UNRESOLVED_DISPUTE_STATUSES = ["open", "under_review", "resolution_pending"] as const;
 
 type LedgerRow = {
   id: string;
@@ -239,7 +240,7 @@ export async function getDashboardData(): Promise<PortalDashboard> {
     getPortalUser(),
     getLiveLedgerRows(),
     getPendingCommission(),
-    getOpenDisputeCount(),
+    getUnresolvedDisputeCount(),
   ]);
 
   const bigLinkOwesAtlas = sumByDirection(rows, BIG_LINK_ID, ATLAS_ID);
@@ -533,12 +534,25 @@ async function getPendingCommission(): Promise<Cents> {
   );
 }
 
-async function getOpenDisputeCount() {
+function isUnresolvedDisputeStatus(status: string) {
+  return UNRESOLVED_DISPUTE_STATUSES.includes(status.toLowerCase() as (typeof UNRESOLVED_DISPUTE_STATUSES)[number]);
+}
+
+export async function getUnresolvedDisputeCount(): Promise<number> {
+  if (!isSupabaseConfigured()) {
+    if (!shouldUseDemoData()) {
+      return 0;
+    }
+
+    return demoDisputes.filter((dispute) => isUnresolvedDisputeStatus(dispute.status)).length;
+  }
+
+  await getPortalUser();
   const supabase = await createSupabaseServerClient();
   const { count, error } = await supabase
     .from("disputes")
     .select("id", { count: "exact", head: true })
-    .in("status", ["open", "under_review", "resolution_pending"]);
+    .in("status", UNRESOLVED_DISPUTE_STATUSES);
 
   if (error) {
     throw new Error(error.message);

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   BookOpenCheck,
@@ -16,17 +17,14 @@ import {
 import { cn } from "@/lib/utils";
 import type { PortalUser } from "@/lib/portal/types";
 
-const navigation = [
-  { label: "Overview", href: "/", icon: Gauge },
-  { label: "Ledger", href: "/ledger", icon: BookOpenCheck },
-  { label: "Referrals", href: "/referrals", icon: Handshake },
-  { label: "Deals", href: "/deals", icon: BriefcaseBusiness },
-  { label: "Invoices", href: "/invoices", icon: ReceiptText },
-  { label: "Disputes", href: "/disputes", icon: Scale, count: 2 },
-  { label: "Monthly close", href: "/statements", icon: Landmark },
-];
+type SidebarNavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  count?: number;
+};
 
-const secondaryNavigation = [
+const secondaryNavigation: SidebarNavItem[] = [
   { label: "Notifications", href: "/notifications", icon: Bell },
   { label: "Audit trail", href: "/audit", icon: ShieldCheck },
   { label: "Settings", href: "/settings", icon: Settings },
@@ -36,7 +34,7 @@ function NavLink({
   item,
   activeHref,
 }: {
-  item: (typeof navigation)[number] | (typeof secondaryNavigation)[number];
+  item: SidebarNavItem;
   activeHref: string;
 }) {
   const Icon = item.icon;
@@ -64,7 +62,25 @@ function NavLink({
   );
 }
 
-export function Sidebar({ activeHref, user }: { activeHref: string; user: PortalUser }) {
+export function Sidebar({
+  activeHref,
+  user,
+  unresolvedDisputeCount,
+}: {
+  activeHref: string;
+  user: PortalUser;
+  unresolvedDisputeCount: number;
+}) {
+  const navigation: SidebarNavItem[] = [
+    { label: "Overview", href: "/", icon: Gauge },
+    { label: "Ledger", href: "/ledger", icon: BookOpenCheck },
+    { label: "Referrals", href: "/referrals", icon: Handshake },
+    { label: "Deals", href: "/deals", icon: BriefcaseBusiness },
+    { label: "Invoices", href: "/invoices", icon: ReceiptText },
+    { label: "Disputes", href: "/disputes", icon: Scale, count: unresolvedDisputeCount },
+    { label: "Monthly close", href: "/statements", icon: Landmark },
+  ];
+
   return (
     <aside className="sidebar" aria-label="Primary navigation">
       <div className="sidebar-logo">
