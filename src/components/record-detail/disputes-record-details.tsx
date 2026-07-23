@@ -4,6 +4,7 @@ import { TriangleAlert } from "lucide-react";
 import { formatZar } from "@/domain/money";
 import { StatusBadge } from "@/components/status-badge";
 import { InlineNoteField } from "@/components/record-detail/inline-note-field";
+import { RowAction } from "@/components/record-detail/row-action";
 import { RecordDetailWorkspace } from "@/components/record-detail/record-detail-workspace";
 import { resolveDisputeAction } from "@/lib/portal/actions";
 import type { DisputeView } from "@/lib/portal/types";
@@ -14,6 +15,8 @@ type Props = {
   live: boolean;
   error?: string;
 };
+
+const disputeActionHint = "dispute-resolve";
 
 export function DisputesRecordDetails({ disputes, userCompanyId, live, error }: Props) {
   return (
@@ -30,19 +33,44 @@ export function DisputesRecordDetails({ disputes, userCompanyId, live, error }: 
         </>
       }
       renderPanelTitle={(dispute) => dispute.reference}
-      renderRow={(dispute) => (
-        <>
-          <div>
-            <span className="reference">{dispute.reference}</span>
-            <h3>{dispute.ledgerEntryDescription}</h3>
-            <p>{dispute.openedBy}, {dispute.createdAt}</p>
-          </div>
-          <div className="record-row-meta">
-            <StatusBadge tone="disputed">{dispute.status}</StatusBadge>
-          </div>
-        </>
-      )}
-      renderPanel={(dispute) => {
+      renderRow={(dispute, isSelected, openRecord) => {
+        const normalisedStatus = dispute.status.toLowerCase();
+        const isResolved = normalisedStatus.includes("resolved");
+        const isPartyToDispute =
+          userCompanyId !== null &&
+          (dispute.ledgerDebtorCompanyId === userCompanyId || dispute.ledgerCreditorCompanyId === userCompanyId);
+        const canResolve = live && !isResolved && isPartyToDispute && userCompanyId !== dispute.openedByCompanyId;
+        const noActionReason = isResolved
+          ? "Resolved"
+          : !live
+            ? "Actions are unavailable while disconnected."
+            : !isPartyToDispute
+              ? "No action for this account."
+              : "Only the other company can resolve this."
+
+        return (
+          <>
+            <div>
+              <span className="reference">{dispute.reference}</span>
+              <h3>{dispute.ledgerEntryDescription}</h3>
+              <p>{dispute.openedBy}, {dispute.createdAt}</p>
+            </div>
+            <div className="record-row-meta">
+              <StatusBadge tone="disputed">{dispute.status}</StatusBadge>
+              {canResolve ? (
+                <RowAction
+                  mode="open"
+                  label="Resolve"
+                  onActivate={() => openRecord(dispute.id, disputeActionHint)}
+                />
+              ) : (
+                <RowAction reason={noActionReason} />
+              )}
+            </div>
+          </>
+        );
+      }}
+      renderPanel={(dispute, closePanel, rowActionHint) => {
         const normalisedStatus = dispute.status.toLowerCase();
         const isResolved = normalisedStatus.includes("resolved");
         const isPartyToDispute =
@@ -99,7 +127,12 @@ export function DisputesRecordDetails({ disputes, userCompanyId, live, error }: 
                 <input type="hidden" name="returnPath" value="/disputes" />
                 <label>
                   <span>Resolution choice</span>
-                  <select className="text-field" name="outcome" defaultValue="restore_payable">
+                  <select
+                    className="text-field"
+                    name="outcome"
+                    defaultValue="restore_payable"
+                    data-record-action-focus={rowActionHint === disputeActionHint ? `${dispute.id}:${rowActionHint}` : undefined}
+                  >
                     <option value="restore_payable">Restore payable</option>
                     <option value="close_with_adjustment">Close with adjustment</option>
                   </select>
@@ -120,6 +153,12 @@ export function DisputesRecordDetails({ disputes, userCompanyId, live, error }: 
               </p>
             ) : null}
             {isResolved ? <p className="detail-success">This dispute has already been resolved.</p> : null}
+
+            <div className="detail-actions">
+              <button className="link-button" type="button" onClick={closePanel}>
+                Dismiss
+              </button>
+            </div>
           </div>
         );
       }}

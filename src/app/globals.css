@@ -1451,3 +1451,38 @@ select:focus-visible,
     transform: none;
   }
 }
+
+.record-row-action {
+  opacity: 0;
+  transition:
+    opacity 120ms ease-out;
+}
+
+.record-row:hover .record-row-action,
+.record-row:focus-within .record-row-action,
+.record-row-action:focus-within,
+.record-row-action:focus-visible {
+  opacity: 1;
+}
+
+.record-row-action.record-row-reason {
+  display: block;
+  margin: 0;
+  max-width: 190px;
+  color: var(--text-muted);
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.row-action-form {
+  display: grid;
+  justify-items: end;
+}
+
+.row-action-button {
+  width: 100%;
+  min-height: 34px;
+  padding-inline: 12px;
+  font-size: 12px;
+}

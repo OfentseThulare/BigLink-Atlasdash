@@ -3,6 +3,7 @@
 import { ReceiptText } from "lucide-react";
 import { formatZar } from "@/domain/money";
 import { StatusBadge } from "@/components/status-badge";
+import { RowAction } from "@/components/record-detail/row-action";
 import { RecordDetailWorkspace } from "@/components/record-detail/record-detail-workspace";
 import { recordInvoicePaymentAction } from "@/lib/portal/actions";
 import type { InvoiceView } from "@/lib/portal/types";
@@ -20,6 +21,8 @@ const paidStateTone: Record<InvoiceView["paidState"], "credit" | "pending" | "di
   paid: "credit",
 };
 
+const invoiceActionHint = "invoice-record-payment";
+
 export function InvoicesRecordDetails({ invoices, userCompanyId, live, error }: Props) {
   return (
     <RecordDetailWorkspace
@@ -35,30 +38,60 @@ export function InvoicesRecordDetails({ invoices, userCompanyId, live, error }: 
       }
       emptyMessage="No invoice records were loaded yet."
       renderPanelTitle={(invoice) => invoice.number}
-      renderRow={(invoice, isSelected) => (
-        <>
-          <div>
-            <span className="reference">{invoice.number}</span>
-            <h3>{invoice.client}</h3>
-            <p>
-              {invoice.kind}, {invoice.sourceSystem}
-            </p>
-            <p>{invoice.description}</p>
-          </div>
-          <div className="record-row-meta">
-            <strong>{formatZar(invoice.total)}</strong>
-            <span className="subtle">Paid {formatZar(invoice.paid)}</span>
-            <StatusBadge tone={paidStateTone[invoice.paidState]}>{invoice.status}</StatusBadge>
-          </div>
-        </>
-      )}
-      renderPanel={(invoice) => {
+      renderRow={(invoice, isSelected, openRecord) => {
+        const normalisedStatus = invoice.status.toLowerCase();
         const canRecordPayment =
           live &&
           userCompanyId !== null &&
-          invoice.billToCompanyId !== null &&
-          invoice.billToCompanyId === userCompanyId;
+          invoice.issuerCompanyId === userCompanyId &&
+          (normalisedStatus === "issued" || normalisedStatus === "partially paid") &&
+          invoice.paidState !== "paid";
 
+        const noActionReason = !live
+          ? "Actions are unavailable while disconnected."
+          : userCompanyId === null
+            ? "Sign in to record payment."
+            : invoice.issuerCompanyId !== userCompanyId
+              ? "Only the invoice issuer can record payment."
+              : invoice.paidState === "paid"
+                ? "Paid"
+                : "No quick action";
+
+        return (
+          <>
+            <div>
+              <span className="reference">{invoice.number}</span>
+              <h3>{invoice.client}</h3>
+              <p>
+                {invoice.kind}, {invoice.sourceSystem}
+              </p>
+              <p>{invoice.description}</p>
+            </div>
+            <div className="record-row-meta">
+              <strong>{formatZar(invoice.total)}</strong>
+              <span className="subtle">Paid {formatZar(invoice.paid)}</span>
+              <StatusBadge tone={paidStateTone[invoice.paidState]}>{invoice.status}</StatusBadge>
+              {canRecordPayment ? (
+                <RowAction
+                  mode="open"
+                  label="Record payment"
+                  onActivate={() => openRecord(invoice.id, invoiceActionHint)}
+                />
+              ) : (
+                <RowAction reason={noActionReason} />
+              )}
+            </div>
+          </>
+        );
+      }}
+      renderPanel={(invoice, closePanel, rowActionHint) => {
+        const normalisedStatus = invoice.status.toLowerCase();
+        const canRecordPayment =
+          live &&
+          userCompanyId !== null &&
+          invoice.issuerCompanyId === userCompanyId &&
+          (normalisedStatus === "issued" || normalisedStatus === "partially paid") &&
+          invoice.paidState !== "paid";
         const isPaid = invoice.paidState === "paid";
 
         return (
@@ -91,12 +124,23 @@ export function InvoicesRecordDetails({ invoices, userCompanyId, live, error }: 
               </p>
             </div>
 
-            {canRecordPayment && !isPaid ? (
+            {canRecordPayment ? (
               <form action={recordInvoicePaymentAction} className="action-form">
                 <input type="hidden" name="invoiceId" value={invoice.id} />
                 <label>
                   <span>Amount received</span>
-                  <input className="text-field" name="amount" inputMode="decimal" placeholder="575.00" required />
+                  <input
+                    className="text-field"
+                    name="amount"
+                    inputMode="decimal"
+                    placeholder="575.00"
+                    required
+                    data-record-action-focus={
+                      rowActionHint === invoiceActionHint
+                        ? `${invoice.id}:${rowActionHint}`
+                        : undefined
+                    }
+                  />
                 </label>
                 <label>
                   <span>Paid on</span>

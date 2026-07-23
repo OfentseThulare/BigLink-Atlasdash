@@ -4,6 +4,7 @@ import { WalletCards } from "lucide-react";
 import { formatZar } from "@/domain/money";
 import { StatusBadge } from "@/components/status-badge";
 import { InlineNoteField } from "@/components/record-detail/inline-note-field";
+import { RowAction } from "@/components/record-detail/row-action";
 import {
   decideLedgerSettlementAction,
   openDisputeAction,
@@ -20,6 +21,12 @@ type Props = {
   error?: string;
 };
 
+const rowActionHints = {
+  confirmSettlement: "ledger-confirm-settlement",
+  declarePaid: "ledger-declare-paid",
+  markReceived: "ledger-mark-received",
+} as const;
+
 export function LedgerRecordDetails({ entries, userCompanyId, live, error }: Props) {
   return (
     <RecordDetailWorkspace
@@ -35,22 +42,84 @@ export function LedgerRecordDetails({ entries, userCompanyId, live, error }: Pro
       }
       emptyMessage="No ledger entries are available for your account."
       renderPanelTitle={(entry) => entry.reference}
-      renderRow={(entry, isSelected) => (
-        <>
-          <div>
-            <span className="reference">{entry.reference}</span>
-            <h3>{entry.description}</h3>
-            <p>
-              {entry.date}, {entry.direction}
-            </p>
-          </div>
-          <div className="record-row-meta">
-            <strong>{formatZar(entry.amount)}</strong>
-            <StatusBadge tone={entry.tone}>{entry.status}</StatusBadge>
-          </div>
-        </>
-      )}
-      renderPanel={(entry, closePanel) => {
+      renderRow={(entry, isSelected, openRecord) => {
+        const canPropose =
+          live &&
+          entry.statusCode === "payable" &&
+          userCompanyId !== null &&
+          entry.debtorCompanyId === userCompanyId &&
+          entry.settlementProposal === null;
+        const canRecordReceipt =
+          live &&
+          (entry.statusCode === "payable" || entry.statusCode === "included_in_statement") &&
+          userCompanyId !== null &&
+          entry.creditorCompanyId === userCompanyId;
+        const canDecide =
+          live &&
+          entry.statusCode === "payable" &&
+          userCompanyId !== null &&
+          entry.creditorCompanyId === userCompanyId &&
+          entry.settlementProposal !== null;
+        const isPayable = entry.statusCode === "payable";
+        const isParty =
+          userCompanyId !== null && (entry.debtorCompanyId === userCompanyId || entry.creditorCompanyId === userCompanyId);
+
+        const primaryAction =
+          canDecide ? rowActionHints.confirmSettlement : canRecordReceipt ? rowActionHints.markReceived : canPropose ? rowActionHints.declarePaid : null;
+
+        const noActionReason = !live
+          ? "Actions are unavailable while disconnected."
+          : !isParty
+            ? "No action for this company."
+            : !isPayable
+              ? "Settled"
+              : entry.debtorCompanyId === userCompanyId && entry.settlementProposal !== null
+                ? "Awaiting counterparty"
+                : "No quick action";
+
+        return (
+          <>
+            <div>
+              <span className="reference">{entry.reference}</span>
+              <h3>{entry.description}</h3>
+              <p>
+                {entry.date}, {entry.direction}
+              </p>
+            </div>
+            <div className="record-row-meta">
+              <strong>{formatZar(entry.amount)}</strong>
+              <StatusBadge tone={entry.tone}>{entry.status}</StatusBadge>
+              {primaryAction === rowActionHints.confirmSettlement ? (
+                <RowAction
+                  mode="confirm"
+                  label="Confirm settlement"
+                  confirmMessage="Confirm settlement and mark this payable as settled."
+                  action={decideLedgerSettlementAction}
+                >
+                  <input type="hidden" name="ledgerEntryId" value={entry.id} />
+                  <input type="hidden" name="returnPath" value="/ledger" />
+                  <input type="hidden" name="approved" value="true" />
+                </RowAction>
+              ) : primaryAction === rowActionHints.markReceived ? (
+                <RowAction
+                  mode="open"
+                  label="Mark received"
+                  onActivate={() => openRecord(entry.id, rowActionHints.markReceived)}
+                />
+              ) : primaryAction === rowActionHints.declarePaid ? (
+                <RowAction
+                  mode="open"
+                  label="Declare paid"
+                  onActivate={() => openRecord(entry.id, rowActionHints.declarePaid)}
+                />
+              ) : (
+                <RowAction reason={noActionReason} />
+              )}
+            </div>
+          </>
+        );
+      }}
+      renderPanel={(entry, closePanel, rowActionHint) => {
         const canPropose =
           live &&
           entry.statusCode === "payable" &&
@@ -73,7 +142,8 @@ export function LedgerRecordDetails({ entries, userCompanyId, live, error }: Pro
           entry.statusCode !== "disputed" &&
           userCompanyId !== null &&
           (entry.debtorCompanyId === userCompanyId || entry.creditorCompanyId === userCompanyId);
-
+        const receiptActionFocus =
+          rowActionHint === rowActionHints.markReceived || rowActionHint === rowActionHints.declarePaid;
         return (
           <div className="record-detail-panel-content">
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
@@ -128,7 +198,13 @@ export function LedgerRecordDetails({ entries, userCompanyId, live, error }: Pro
                 <input type="hidden" name="returnPath" value="/ledger" />
                 <label>
                   <span>Paid on</span>
-                  <input type="date" className="text-field" name="paidOn" required />
+                  <input
+                    type="date"
+                    className="text-field"
+                    name="paidOn"
+                    required
+                    data-record-action-focus={receiptActionFocus && rowActionHint === rowActionHints.declarePaid ? `${entry.id}:${rowActionHint}` : undefined}
+                  />
                 </label>
                 <label>
                   <span>Settlement reference</span>
@@ -146,7 +222,17 @@ export function LedgerRecordDetails({ entries, userCompanyId, live, error }: Pro
                 <input type="hidden" name="returnPath" value="/ledger" />
                 <label>
                   <span>Paid on</span>
-                  <input type="date" className="text-field" name="paidOn" required />
+                  <input
+                    type="date"
+                    className="text-field"
+                    name="paidOn"
+                    required
+                    data-record-action-focus={
+                      receiptActionFocus && rowActionHint === rowActionHints.markReceived
+                        ? `${entry.id}:${rowActionHint}`
+                        : undefined
+                    }
+                  />
                 </label>
                 <label>
                   <span>Receipt reference</span>

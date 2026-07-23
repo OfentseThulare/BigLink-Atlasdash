@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   useEffect,
   useMemo,
@@ -9,9 +10,17 @@ import {
   useState,
 } from "react";
 
-type RenderRow<T extends { id: string }> = (row: T, isSelected: boolean) => ReactNode;
+type RenderRow<T extends { id: string }> = (
+  row: T,
+  isSelected: boolean,
+  openRecord: (recordId: string, actionHint?: string | null) => void,
+) => ReactNode;
 
-type RenderPanel<T extends { id: string }> = (row: T, closePanel: () => void) => ReactNode;
+type RenderPanel<T extends { id: string }> = (
+  row: T,
+  closePanel: () => void,
+  actionHint?: string | null,
+) => ReactNode;
 
 type Props<T extends { id: string }> = {
   records: readonly T[];
@@ -35,21 +44,24 @@ export function RecordDetailWorkspace<T extends { id: string }>({
   initialRecordId,
 }: Props<T>) {
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(initialRecordId ?? null);
+  const [selectedRecordAction, setSelectedRecordAction] = useState<string | null>(null);
   const selectedRecord = useMemo(
     () => records.find((record) => record.id === selectedRecordId),
     [records, selectedRecordId],
   );
   const focusReturnId = useRef<string | null>(null);
-  const rowRefs = useRef(new Map<string, HTMLButtonElement | null>());
+  const rowRefs = useRef(new Map<string, HTMLDivElement | null>());
 
   useEffect(() => {
     if (!records.length) {
-      setSelectedRecordId((current) => (current === null ? null : null));
+      setSelectedRecordId(null);
+      setSelectedRecordAction(null);
       return;
     }
 
     if (selectedRecordId && !records.find((row) => row.id === selectedRecordId)) {
       setSelectedRecordId(records[0]?.id ?? null);
+      setSelectedRecordAction(null);
     }
   }, [records, selectedRecordId]);
 
@@ -71,20 +83,28 @@ export function RecordDetailWorkspace<T extends { id: string }>({
     };
   }, [selectedRecordId]);
 
-  const openRecord = (recordId: string) => {
+  useEffect(() => {
+    if (selectedRecordId === null || selectedRecordAction === null) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const selector = `[data-record-action-focus="${selectedRecordId}:${selectedRecordAction}"]`;
+      const field = document.querySelector<HTMLElement>(selector);
+      field?.focus();
+    });
+  }, [selectedRecordId, selectedRecordAction]);
+
+  const openRecord = (recordId: string, actionHint: string | null = null) => {
     focusReturnId.current = recordId;
     setSelectedRecordId(recordId);
+    setSelectedRecordAction(actionHint);
   };
 
   const closePanel = () => {
     const returnId = focusReturnId.current;
-    setSelectedRecordId((current) => {
-      if (current === null) {
-        return null;
-      }
-
-      return null;
-    });
+    setSelectedRecordId(null);
+    setSelectedRecordAction(null);
 
     if (returnId) {
       requestAnimationFrame(() => {
@@ -104,13 +124,25 @@ export function RecordDetailWorkspace<T extends { id: string }>({
           {records.length === 0 ? (
             <p className="record-list-empty">{emptyMessage}</p>
           ) : (
-      records.map((record) => {
+            records.map((record) => {
               const isSelected = selectedRecordId === record.id;
 
+              const onRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+                if (event.target !== event.currentTarget) {
+                  return;
+                }
+
+                if (event.key !== "Enter" && event.key !== " ") {
+                  return;
+                }
+
+                event.preventDefault();
+                openRecord(record.id);
+              };
+
               return (
-                <button
+                <div
                   key={record.id}
-                  type="button"
                   ref={(node) => {
                     if (!node) {
                       rowRefs.current.delete(record.id);
@@ -122,10 +154,13 @@ export function RecordDetailWorkspace<T extends { id: string }>({
                   aria-expanded={isSelected}
                   aria-current={isSelected ? "page" : undefined}
                   aria-controls="record-detail-panel"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => openRecord(record.id)}
+                  onKeyDown={onRowKeyDown}
                 >
-                  {renderRow(record, isSelected)}
-                </button>
+                  {renderRow(record, isSelected, openRecord)}
+                </div>
               );
             })
           )}
@@ -144,7 +179,9 @@ export function RecordDetailWorkspace<T extends { id: string }>({
               Close
             </button>
           </div>
-          <div className="record-detail-panel-content">{renderPanel(selectedRecord, closePanel)}</div>
+          <div className="record-detail-panel-content">
+            {renderPanel(selectedRecord, closePanel, selectedRecordAction)}
+          </div>
         </aside>
       ) : null}
     </div>
