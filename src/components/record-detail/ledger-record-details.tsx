@@ -8,6 +8,7 @@ import {
   decideLedgerSettlementAction,
   openDisputeAction,
   proposeLedgerSettlementAction,
+  recordLedgerReceiptAction,
 } from "@/lib/portal/actions";
 import type { LedgerEntryView } from "@/lib/portal/types";
 import { RecordDetailWorkspace } from "@/components/record-detail/record-detail-workspace";
@@ -56,6 +57,11 @@ export function LedgerRecordDetails({ entries, userCompanyId, live, error }: Pro
           userCompanyId !== null &&
           entry.debtorCompanyId === userCompanyId &&
           entry.settlementProposal === null;
+        const canRecordReceipt =
+          live &&
+          (entry.statusCode === "payable" || entry.statusCode === "included_in_statement") &&
+          userCompanyId !== null &&
+          entry.creditorCompanyId === userCompanyId;
         const canDecide =
           live &&
           entry.statusCode === "payable" &&
@@ -130,6 +136,24 @@ export function LedgerRecordDetails({ entries, userCompanyId, live, error }: Pro
                 </label>
                 <button className="primary-button full-width" type="submit" disabled={!live}>
                   Propose settlement
+                </button>
+              </form>
+            ) : null}
+
+            {canRecordReceipt ? (
+              <form action={recordLedgerReceiptAction} className="action-form">
+                <input type="hidden" name="ledgerEntryId" value={entry.id} />
+                <input type="hidden" name="returnPath" value="/ledger" />
+                <label>
+                  <span>Paid on</span>
+                  <input type="date" className="text-field" name="paidOn" required />
+                </label>
+                <label>
+                  <span>Receipt reference</span>
+                  <input className="text-field" name="reference" placeholder="Optional" />
+                </label>
+                <button className="primary-button full-width" type="submit" disabled={!live}>
+                  Record money received
                 </button>
               </form>
             ) : null}
